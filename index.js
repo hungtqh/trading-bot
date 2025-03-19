@@ -1,9 +1,9 @@
-const { ethers, parseEther } = require('ethers');
+const { ethers, parseEther, parseUnits } = require('ethers');
 const IUniswapV3PoolABI = require('@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json');
 const IUniswapV3Router = require('@uniswap/v3-periphery/artifacts/contracts/interfaces/ISwapRouter.sol/ISwapRouter.json');
 require("dotenv").config();
 
-// // Tetnet Configuration
+// Tetnet Configuration
 // const UNISWAP_V3_ROUTER_ADDRESS = '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E';
 // const WETH_ADDRESS = '0xfff9976782d46cc05630d1f6ebab18b2324d6b14';
 // const TOKEN_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'; // USDC
@@ -26,9 +26,14 @@ const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
 // Testnet only
 // const routerAbi = ['function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)'];
-
+const erc20Abi = [
+    'function allowance(address owner, address spender) external view returns (uint256)',
+    'function approve(address spender, uint256 amount) external returns (bool)',
+    'function decimals() external view returns (uint8)'
+];
 const routerContract = new ethers.Contract(UNISWAP_V3_ROUTER_ADDRESS, IUniswapV3Router.abi, wallet);
 const poolContract = new ethers.Contract(POOL_ADDRESS, IUniswapV3PoolABI.abi, provider);
+const tokenContract = new ethers.Contract(TOKEN_ADDRESS, erc20Abi, wallet);
 
 // Price history array
 let priceHistory = [];
@@ -36,27 +41,59 @@ let priceHistory = [];
 async function initializePoolData() {
     const token0 = await poolContract.token0();
     const token1 = await poolContract.token1();
+  
+    // Fetch token decimals dynamically
+    const token0Contract = new ethers.Contract(token0, erc20Abi, provider);
+    const token1Contract = new ethers.Contract(token1, erc20Abi, provider);
+    
+    const decimalsToken0 = Number(await token0Contract.decimals());
+    const decimalsToken1 = Number(await token1Contract.decimals());
+  
     return {
-        token0: token0.toLowerCase(),
-        token1: token1.toLowerCase(),
-        isWethToken1: token1.toLowerCase() === WETH_ADDRESS.toLowerCase()
+      decimalsToken0,
+      decimalsToken1,
+      isWethToken1: token1.toLowerCase() === WETH_ADDRESS.toLowerCase()
     };
 }
 
+async function checkAndApproveToken(spender, amountInEth) {
+    try {
+      // Get token decimals
+      const decimals = await tokenContract.decimals();
+  
+      // Convert ETH to Token amount using currentPrice
+      const amountInTokens = parseUnits(amountInEth.toString(), decimals);
+  
+      // Check existing allowance
+      const allowance = await tokenContract.allowance(WALLET_ADDRESS, spender);
+  
+      if (allowance < amountInTokens) {
+        console.log(`Insufficient allowance: ${allowance}. Approving MAX_UINT256`);
+        const tx = await tokenContract.approve(spender, ethers.MaxUint256);
+        await tx.wait();
+        console.log(`Approval successful.`);
+      } else {
+        console.log(`Sufficient allowance. No need to approve.`);
+      }
+  
+      return amountInTokens;
+    } catch (error) {
+      console.error("Approval check failed:", error.message);
+    }
+  }
+
 async function getCurrentPrice() {
     try {
-      const { token0, token1, isWethToken1 } = await initializePoolData();
+      const { decimalsToken0, decimalsToken1, isWethToken1 } = await initializePoolData();
+  
+      // Get sqrtPriceX96 from the pool
       const slot0 = await poolContract.slot0();
       const sqrtPriceX96 = slot0.sqrtPriceX96;
   
-      // Set decimals explicitly (USDC: 6 decimals, WETH: 18 decimals)
-      const decimalsToken0 = token0 === WETH_ADDRESS.toLowerCase() ? 18 : 6;
-      const decimalsToken1 = token1 === WETH_ADDRESS.toLowerCase() ? 18 : 6;
-  
-      // Correct formula using BigInt for precision
+      // Convert sqrtPriceX96 to a floating-point price using BigInt for precision
       const price = (Number(sqrtPriceX96) / 2 ** 96) ** 2;
   
-      // Adjust decimals properly
+      // Adjust for token decimals
       const decimalAdjustment = 10 ** (decimalsToken0 - decimalsToken1);
       const adjustedPrice = price * decimalAdjustment;
   
@@ -69,7 +106,7 @@ async function getCurrentPrice() {
       return 0;
     }
 }
-
+  
 function calculateMovingAverage(prices, period = 5) {
     if (prices.length < period) return null;
     const slice = prices.slice(-period);
@@ -94,13 +131,15 @@ async function executeTrade(action, amountInEth) {
         };
         tx = await routerContract.exactInputSingle(params, { value: amountIn, gasLimit: 350000 });
     } else if (action === 'SELL') {
+        const amountWithDecimals = await checkAndApproveToken(UNISWAP_V3_ROUTER_ADDRESS, amountInEth);
+
         const params = {
             tokenIn: TOKEN_ADDRESS,
             tokenOut: WETH_ADDRESS,
             fee: FEE_PERCENT,
             recipient: WALLET_ADDRESS,
             deadline: deadline,
-            amountIn: amountIn,
+            amountIn: amountWithDecimals,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         };
@@ -121,7 +160,6 @@ async function tradingStrategy() {
             const currentPrice = await getCurrentPrice();
             console.log('CurrentPrice USDC/WETH', currentPrice);
             priceHistory.push(currentPrice);
-
             if (priceHistory.length > 100) {
                 priceHistory.shift();
             }
