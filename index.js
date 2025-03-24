@@ -113,25 +113,33 @@ function calculateMovingAverage(prices, period = 5) {
     return slice.reduce((sum, price) => sum + price, 0) / period;
 }
 
-async function executeTrade(action, amountInEth) {
-    const amountIn = parseEther(amountInEth.toString());
-    const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20 minutes
+async function executeTrade(action, amountInUSDC) {
+    const tokenDecimals = await tokenContract.decimals();
+    const amountIn = parseUnits(amountInUSDC.toString(), tokenDecimals);
+    const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
 
     let tx;
+
     if (action === 'BUY') {
+        // Get current price to calculate approximate ETH amount required
+        const currentPrice = await getCurrentPrice();
+        const requiredEth = (amountInUSDC * currentPrice).toFixed(18);
+        const amountInETH = parseEther(requiredEth.toString());
+
         const params = {
             tokenIn: WETH_ADDRESS,
             tokenOut: TOKEN_ADDRESS,
             fee: FEE_PERCENT,
             recipient: WALLET_ADDRESS,
             deadline: deadline,
-            amountIn: amountIn,
+            amountIn: amountInETH,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         };
-        tx = await routerContract.exactInputSingle(params, { value: amountIn, gasLimit: 350000 });
+
+        tx = await routerContract.exactInputSingle(params, { value: amountInETH, gasLimit: 350000 });
     } else if (action === 'SELL') {
-        const amountWithDecimals = await checkAndApproveToken(UNISWAP_V3_ROUTER_ADDRESS, amountInEth);
+        await checkAndApproveToken(UNISWAP_V3_ROUTER_ADDRESS, amountInUSDC);
 
         const params = {
             tokenIn: TOKEN_ADDRESS,
@@ -139,10 +147,11 @@ async function executeTrade(action, amountInEth) {
             fee: FEE_PERCENT,
             recipient: WALLET_ADDRESS,
             deadline: deadline,
-            amountIn: amountWithDecimals,
+            amountIn: amountIn,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         };
+
         tx = await routerContract.exactInputSingle(params, { gasLimit: 350000 });
     }
 
@@ -152,17 +161,16 @@ async function executeTrade(action, amountInEth) {
 
 async function tradingStrategy() {
     let positionOpen = false;
-    const tradeAmount = process.env.AMOUNT_TO_TRADE; // 0.0001 ETH
-    const duration = 300000; // 5 minutes
+    const tradeAmountUSDC = process.env.AMOUNT_TO_TRADE;
+    const duration = 300000;
 
     while (true) {
         try {
             const currentPrice = await getCurrentPrice();
             console.log('CurrentPrice USDC/WETH', currentPrice);
+
             priceHistory.push(currentPrice);
-            if (priceHistory.length > 100) {
-                priceHistory.shift();
-            }
+            if (priceHistory.length > 100) priceHistory.shift();
 
             const ma5 = calculateMovingAverage(priceHistory);
             if (!ma5) {
@@ -171,12 +179,13 @@ async function tradingStrategy() {
             }
 
             console.log(`Price: ${currentPrice}, MA5: ${ma5}`);
+
             if (!positionOpen && currentPrice > ma5) {
-                const txHash = await executeTrade('BUY', tradeAmount);
+                const txHash = await executeTrade('BUY', tradeAmountUSDC);
                 console.log(`Buy executed at ${currentPrice}. Tx: ${txHash}`);
                 positionOpen = true;
             } else if (positionOpen && currentPrice < ma5) {
-                const txHash = await executeTrade('SELL', tradeAmount);
+                const txHash = await executeTrade('SELL', tradeAmountUSDC);
                 console.log(`Sell executed at ${currentPrice}. Tx: ${txHash}`);
                 positionOpen = false;
             }
