@@ -137,7 +137,7 @@ async function executeTrade(action, amountInUSDC) {
             sqrtPriceLimitX96: 0
         };
 
-        tx = await routerContract.exactInputSingle(params, { value: amountInETH, gasLimit: 350000 });
+        tx = await routerContract.exactInputSingle(params, { gasLimit: 350000 });
     } else if (action === 'SELL') {
         await checkAndApproveToken(UNISWAP_V3_ROUTER_ADDRESS, amountInUSDC);
 
