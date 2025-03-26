@@ -33,7 +33,6 @@ const erc20Abi = [
 ];
 const routerContract = new ethers.Contract(UNISWAP_V3_ROUTER_ADDRESS, IUniswapV3Router.abi, wallet);
 const poolContract = new ethers.Contract(POOL_ADDRESS, IUniswapV3PoolABI.abi, provider);
-const tokenContract = new ethers.Contract(TOKEN_ADDRESS, erc20Abi, wallet);
 
 // Price history array
 let priceHistory = [];
@@ -56,9 +55,10 @@ async function initializePoolData() {
     };
 }
 
-async function checkAndApproveToken(spender, amountInEth) {
+async function checkAndApproveToken(tokenAddress, spender, amountInEth) {
     try {
       // Get token decimals
+      const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, wallet);
       const decimals = await tokenContract.decimals();
   
       // Convert ETH to Token amount using currentPrice
@@ -114,6 +114,7 @@ function calculateMovingAverage(prices, period = 5) {
 }
 
 async function executeTrade(action, amountInUSDC) {
+    const tokenContract = new ethers.Contract(TOKEN_ADDRESS, erc20Abi, wallet);
     const tokenDecimals = await tokenContract.decimals();
     const amountIn = parseUnits(amountInUSDC.toString(), tokenDecimals);
     const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
@@ -125,6 +126,7 @@ async function executeTrade(action, amountInUSDC) {
         const currentPrice = await getCurrentPrice();
         const requiredEth = (amountInUSDC * currentPrice).toFixed(18);
         const amountInETH = parseEther(requiredEth.toString());
+        await checkAndApproveToken(WETH_ADDRESS, UNISWAP_V3_ROUTER_ADDRESS, amountInETH);
 
         const params = {
             tokenIn: WETH_ADDRESS,
@@ -139,7 +141,7 @@ async function executeTrade(action, amountInUSDC) {
 
         tx = await routerContract.exactInputSingle(params, { gasLimit: 350000 });
     } else if (action === 'SELL') {
-        await checkAndApproveToken(UNISWAP_V3_ROUTER_ADDRESS, amountInUSDC);
+        await checkAndApproveToken(TOKEN_ADDRESS, UNISWAP_V3_ROUTER_ADDRESS, amountInUSDC);
 
         const params = {
             tokenIn: TOKEN_ADDRESS,
