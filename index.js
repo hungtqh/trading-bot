@@ -118,85 +118,105 @@ async function executeTrade(action, amountInUSDC) {
     const tokenDecimals = await tokenContract.decimals();
     const amountIn = parseUnits(amountInUSDC.toString(), tokenDecimals);
     const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
-
+  
     let tx;
-
+  
     if (action === 'BUY') {
-        // Get current price to calculate approximate ETH amount required
-        const currentPrice = await getCurrentPrice();
-        const requiredEth = (amountInUSDC * currentPrice).toFixed(18);
-        const amountInETH = parseEther(requiredEth.toString());
-        await checkAndApproveToken(WETH_ADDRESS, UNISWAP_V3_ROUTER_ADDRESS, amountInETH);
-
-        const params = {
-            tokenIn: WETH_ADDRESS,
-            tokenOut: TOKEN_ADDRESS,
-            fee: FEE_PERCENT,
-            recipient: WALLET_ADDRESS,
-            deadline: deadline,
-            amountIn: amountInETH,
-            amountOutMinimum: 0,
-            sqrtPriceLimitX96: 0
-        };
-
-        tx = await routerContract.exactInputSingle(params, { gasLimit: 350000 });
+      const currentPrice = await getCurrentPrice();
+      const requiredEth = (amountInUSDC * currentPrice).toFixed(18);
+      const amountInETH = parseEther(requiredEth.toString());
+      await checkAndApproveToken(WETH_ADDRESS, UNISWAP_V3_ROUTER_ADDRESS, amountInETH);
+  
+      const params = {
+        tokenIn: WETH_ADDRESS,
+        tokenOut: TOKEN_ADDRESS,
+        fee: FEE_PERCENT,
+        recipient: WALLET_ADDRESS,
+        deadline: deadline,
+        amountIn: amountInETH,
+        amountOutMinimum: 0,
+        sqrtPriceLimitX96: 0
+      };
+  
+      tx = await routerContract.exactInputSingle(params, { gasLimit: 350000 });
     } else if (action === 'SELL') {
-        await checkAndApproveToken(TOKEN_ADDRESS, UNISWAP_V3_ROUTER_ADDRESS, amountInUSDC);
-
-        const params = {
-            tokenIn: TOKEN_ADDRESS,
-            tokenOut: WETH_ADDRESS,
-            fee: FEE_PERCENT,
-            recipient: WALLET_ADDRESS,
-            deadline: deadline,
-            amountIn: amountIn,
-            amountOutMinimum: 0,
-            sqrtPriceLimitX96: 0
-        };
-
-        tx = await routerContract.exactInputSingle(params, { gasLimit: 350000 });
+      await checkAndApproveToken(TOKEN_ADDRESS, UNISWAP_V3_ROUTER_ADDRESS, amountIn);
+  
+      const params = {
+        tokenIn: TOKEN_ADDRESS,
+        tokenOut: WETH_ADDRESS,
+        fee: FEE_PERCENT,
+        recipient: WALLET_ADDRESS,
+        deadline: deadline,
+        amountIn: amountIn,
+        amountOutMinimum: 0,
+        sqrtPriceLimitX96: 0
+      };
+  
+      tx = await routerContract.exactInputSingle(params, { gasLimit: 350000 });
     }
-
+  
     const receipt = await tx.wait();
-    return receipt.hash;
+  
+    // Calculate Gas Fee
+    const gasUsed = receipt.gasUsed;
+    const effectiveGasPrice = receipt.gasPrice || tx.gasPrice; 
+    const gasFeeETH = parseFloat(ethers.formatEther(gasUsed * effectiveGasPrice));
+  
+    return {
+      txHash: receipt.hash,
+      gasFeeETH
+    };
 }
-
+  
 async function tradingStrategy() {
     let positionOpen = false;
+    let entryPrice = 0;
     const tradeAmountUSDC = process.env.AMOUNT_TO_TRADE;
-    const duration = 300000;
-
+    const duration = 3000;
+    const TAKE_PROFIT_PERCENT = parseFloat(process.env.TAKE_PROFIT_PERCENT) / 100;
+  
     while (true) {
-        try {
-            const currentPrice = await getCurrentPrice();
-            console.log('CurrentPrice USDC/WETH', currentPrice);
-
-            priceHistory.push(currentPrice);
-            if (priceHistory.length > 100) priceHistory.shift();
-
-            const ma5 = calculateMovingAverage(priceHistory);
-            if (!ma5) {
-                await new Promise(resolve => setTimeout(resolve, duration));
-                continue;
-            }
-
-            console.log(`Price: ${currentPrice}, MA5: ${ma5}`);
-
-            if (!positionOpen && currentPrice > ma5) {
-                const txHash = await executeTrade('BUY', tradeAmountUSDC);
-                console.log(`Buy executed at ${currentPrice}. Tx: ${txHash}`);
-                positionOpen = true;
-            } else if (positionOpen && currentPrice < ma5) {
-                const txHash = await executeTrade('SELL', tradeAmountUSDC);
-                console.log(`Sell executed at ${currentPrice}. Tx: ${txHash}`);
-                positionOpen = false;
-            }
-
-            await new Promise(resolve => setTimeout(resolve, duration));
-        } catch (error) {
-            console.error('Error:', error.message);
-            await new Promise(resolve => setTimeout(resolve, duration));
+      try {
+        const currentPrice = await getCurrentPrice();
+        console.log('CurrentPrice USDC/WETH:', currentPrice);
+  
+        priceHistory.push(currentPrice);
+        if (priceHistory.length > 100) priceHistory.shift();
+  
+        const ma5 = calculateMovingAverage(priceHistory);
+        if (!ma5) {
+          await new Promise(resolve => setTimeout(resolve, duration));
+          continue;
         }
+  
+        console.log(`Price: ${currentPrice}, MA5: ${ma5}`);
+  
+        if (!positionOpen && currentPrice > ma5) {
+          const { txHash, gasFeeETH } = await executeTrade('BUY', tradeAmountUSDC);
+          entryPrice = currentPrice;
+          console.log(`Buy executed at ${currentPrice}. Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
+          positionOpen = true;
+        }
+  
+        if (positionOpen) {
+          const targetPrice = entryPrice * (1 + TAKE_PROFIT_PERCENT);
+          if (currentPrice >= targetPrice || currentPrice < ma5) {
+            const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
+            const grossProfitETH = (currentPrice - entryPrice) * tradeAmountUSDC;
+            const netProfitETH = grossProfitETH - gasFeeETH;
+            console.log(`${currentPrice >= targetPrice ? "Take-profit" : "MA5-cross"} Sell executed at ${currentPrice}. Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
+            console.log(`Gross Profit (ETH): ${grossProfitETH}, Final Net Profit (ETH): ${netProfitETH}`);
+            positionOpen = false;
+            entryPrice = 0;
+          }
+        }
+  
+        await new Promise(resolve => setTimeout(resolve, duration));
+      } catch (error) {
+        console.error('Error:', error.message);
+        await new Promise(resolve => setTimeout(resolve, duration));
+      }
     }
 }
 
