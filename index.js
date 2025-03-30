@@ -121,7 +121,7 @@ async function executeTrade(action, amountInUSDC) {
   
     let tx;
   
-    if (action === 'BUY') {
+    if (action === 'SELL') {
       const currentPrice = await getCurrentPrice();
       const requiredEth = (amountInUSDC * currentPrice).toFixed(18);
       const amountInETH = parseEther(requiredEth.toString());
@@ -139,7 +139,7 @@ async function executeTrade(action, amountInUSDC) {
       };
   
       tx = await routerContract.exactInputSingle(params, { gasLimit: 350000 });
-    } else if (action === 'SELL') {
+    } else if (action === 'BUY') {
       await checkAndApproveToken(TOKEN_ADDRESS, UNISWAP_V3_ROUTER_ADDRESS, amountIn);
   
       const params = {
@@ -173,13 +173,13 @@ async function tradingStrategy() {
     let positionOpen = false;
     let entryPrice = 0;
     const tradeAmountUSDC = process.env.AMOUNT_TO_TRADE;
-    const duration = 3000;
+    const duration = 300000;
     const TAKE_PROFIT_PERCENT = parseFloat(process.env.TAKE_PROFIT_PERCENT) / 100;
   
     while (true) {
       try {
         const currentPrice = await getCurrentPrice();
-        console.log('CurrentPrice USDC/WETH:', currentPrice);
+        console.log('CurrentPrice USDC/WETH:', currentPrice, '-', new Date().toUTCString());
   
         priceHistory.push(currentPrice);
         if (priceHistory.length > 100) priceHistory.shift();
@@ -190,12 +190,12 @@ async function tradingStrategy() {
           continue;
         }
   
-        console.log(`Price: ${currentPrice}, MA5: ${ma5}`);
+        console.log(`Price: ${currentPrice}, MA5: ${ma5}`, '-', new Date().toUTCString());
   
         if (!positionOpen && currentPrice > ma5) {
           const { txHash, gasFeeETH } = await executeTrade('BUY', tradeAmountUSDC);
           entryPrice = currentPrice;
-          console.log(`Buy executed at ${currentPrice}. Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
+          console.log(`Buy executed at ${currentPrice}. Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`, '-', new Date().toUTCString());
           positionOpen = true;
         }
   
@@ -205,7 +205,8 @@ async function tradingStrategy() {
             const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
             const grossProfitETH = (currentPrice - entryPrice) * tradeAmountUSDC;
             const netProfitETH = grossProfitETH - gasFeeETH;
-            console.log(`${currentPrice >= targetPrice ? "Take-profit" : "MA5-cross"} Sell executed at ${currentPrice}. Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
+            console.log(`${currentPrice >= targetPrice ? "Take-profit" : "MA5-cross"} Sell executed at ${currentPrice}`, '-', new Date().toUTCString()); 
+            console.log(`Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
             console.log(`Gross Profit (ETH): ${grossProfitETH}, Final Net Profit (ETH): ${netProfitETH}`);
             positionOpen = false;
             entryPrice = 0;
