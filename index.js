@@ -170,7 +170,6 @@ async function executeTrade(action, amountInUSDC) {
 }
   
 async function tradingStrategy() {
-    let positionOpen = false;
     let entryPrice = 0;
     const tradeAmountUSDC = process.env.AMOUNT_TO_TRADE;
     const duration = 300000;
@@ -178,6 +177,7 @@ async function tradingStrategy() {
   
     while (true) {
       try {
+        let positionOpen = false;
         const currentPrice = await getCurrentPrice();
         console.log('CurrentPrice USDC/WETH:', currentPrice, '-', new Date().toUTCString());
   
@@ -199,7 +199,7 @@ async function tradingStrategy() {
           positionOpen = true;
         }
   
-        if (positionOpen) {
+        if (!positionOpen) {
           const targetPrice = entryPrice * (1 + TAKE_PROFIT_PERCENT);
           if (currentPrice >= targetPrice || currentPrice < ma5) {
             const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
@@ -208,7 +208,7 @@ async function tradingStrategy() {
             console.log(`${currentPrice >= targetPrice ? "Take-profit" : "MA5-cross"} Sell executed at ${currentPrice}`, '-', new Date().toUTCString()); 
             console.log(`Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
             console.log(`Gross Profit (ETH): ${grossProfitETH}, Final Net Profit (ETH): ${netProfitETH}`);
-            positionOpen = false;
+            positionOpen = true;
             entryPrice = 0;
           }
         }
