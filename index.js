@@ -19,6 +19,7 @@ const WETH_ADDRESS = process.env.WETH_ADDRESS;
 const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS; // USDC
 const POOL_ADDRESS = process.env.POOL_ADDRESS; // WETH-USDC 0.05% pool
 const FEE_PERCENT = process.env.FEE_PERCENT;
+const SMA = process.env.SMA;
 
 // Initialize provider and contracts
 const provider = new ethers.JsonRpcProvider(INFURA_URL);
@@ -173,7 +174,7 @@ async function tradingStrategy() {
     let positionOpen = false;
     let entryPrice = 0;
     const tradeAmountUSDC = process.env.AMOUNT_TO_TRADE;
-    const duration = 300000;
+    const duration = SMA * 60 * 1000;
     const TAKE_PROFIT_PERCENT = parseFloat(process.env.TAKE_PROFIT_PERCENT) / 100;
   
     while (true) {
@@ -184,15 +185,15 @@ async function tradingStrategy() {
         priceHistory.push(currentPrice);
         if (priceHistory.length > 100) priceHistory.shift();
   
-        const ma5 = calculateMovingAverage(priceHistory);
-        if (!ma5) {
+        const ma = calculateMovingAverage(priceHistory, SMA);
+        if (!ma) {
           await new Promise(resolve => setTimeout(resolve, duration));
           continue;
         }
   
-        console.log(`Price: ${currentPrice}, MA5: ${ma5}`, '-', new Date().toUTCString());
+        console.log(`Price: ${currentPrice}, MA: ${ma}`, '-', new Date().toUTCString());
   
-        if (!positionOpen && currentPrice > ma5) {
+        if (!positionOpen && currentPrice > ma) {
           const { txHash, gasFeeETH } = await executeTrade('BUY', tradeAmountUSDC);
           entryPrice = currentPrice;
           console.log(`Buy executed at ${currentPrice}. Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`, '-', new Date().toUTCString());
@@ -201,11 +202,11 @@ async function tradingStrategy() {
   
         if (positionOpen) {
           const targetPrice = entryPrice * (1 + TAKE_PROFIT_PERCENT);
-          if (currentPrice >= targetPrice || currentPrice < ma5) {
+          if (currentPrice >= targetPrice || currentPrice < ma) {
             const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
             const grossProfitETH = (currentPrice - entryPrice) * tradeAmountUSDC;
             const netProfitETH = grossProfitETH - gasFeeETH;
-            console.log(`${currentPrice >= targetPrice ? "Take-profit" : "MA5-cross"} Sell executed at ${currentPrice}`, '-', new Date().toUTCString()); 
+            console.log(`${currentPrice >= targetPrice ? "Take-profit" : "MA-cross"} Sell executed at ${currentPrice}`, '-', new Date().toUTCString()); 
             console.log(`Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
             console.log(`Gross Profit (ETH): ${grossProfitETH}, Final Net Profit (ETH): ${netProfitETH}`);
             positionOpen = false;
