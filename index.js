@@ -173,7 +173,7 @@ async function executeTrade(action, amountInUSDC) {
 async function tradingStrategy() {
     let entryPrice = 0;
     const tradeAmountUSDC = process.env.AMOUNT_TO_TRADE;
-    const duration = 300000;
+    const duration = SMA * 60 * 1000;
     const TAKE_PROFIT_PERCENT = parseFloat(process.env.TAKE_PROFIT_PERCENT) / 100;
   
     while (true) {
