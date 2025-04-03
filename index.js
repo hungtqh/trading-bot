@@ -194,7 +194,7 @@ async function tradingStrategy() {
   
         console.log(`Price: ${currentPrice}, MA: ${ma}`, '-', new Date().toUTCString());
   
-        if (!positionOpen && currentPrice > ma) {
+        if (!positionOpen && currentPrice > ma && !bought) {
           const { txHash, gasFeeETH } = await executeTrade('BUY', tradeAmountUSDC);
           entryPrice = currentPrice;
           console.log(`Buy executed at ${currentPrice}. Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`, '-', new Date().toUTCString());
