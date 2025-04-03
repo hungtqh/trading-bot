@@ -108,7 +108,7 @@ async function getCurrentPrice() {
     }
 }
   
-function calculateMovingAverage(prices, period = 5) {
+function calculateMovingAverage(prices, period) {
     if (prices.length < period) return null;
     const slice = prices.slice(-period);
     return slice.reduce((sum, price) => sum + price, 0) / period;
@@ -188,7 +188,7 @@ async function tradingStrategy() {
   
         const ma = calculateMovingAverage(priceHistory, SMA);
         if (!ma) {
-          // await new Promise(resolve => setTimeout(resolve, duration));
+          await new Promise(resolve => setTimeout(resolve, duration));
           continue;
         }
   
