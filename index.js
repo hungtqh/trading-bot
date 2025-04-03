@@ -204,7 +204,7 @@ async function tradingStrategy() {
   
         if (!positionOpen && bought) {
           const targetPrice = entryPrice * (1 + TAKE_PROFIT_PERCENT);
-          if (currentPrice >= targetPrice && currentPrice < ma) {
+          if (currentPrice >= targetPrice || currentPrice < ma) {
             const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
             const grossProfitETH = (currentPrice - entryPrice) * tradeAmountUSDC;
             const netProfitETH = grossProfitETH - gasFeeETH;
