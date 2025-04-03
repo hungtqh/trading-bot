@@ -172,6 +172,7 @@ async function executeTrade(action, amountInUSDC) {
   
 async function tradingStrategy() {
     let entryPrice = 0;
+    let bought = false;
     const tradeAmountUSDC = process.env.AMOUNT_TO_TRADE;
     const duration = SMA * 60 * 1000;
     const TAKE_PROFIT_PERCENT = parseFloat(process.env.TAKE_PROFIT_PERCENT) / 100;
@@ -187,7 +188,7 @@ async function tradingStrategy() {
   
         const ma = calculateMovingAverage(priceHistory, SMA);
         if (!ma) {
-          await new Promise(resolve => setTimeout(resolve, duration));
+          // await new Promise(resolve => setTimeout(resolve, duration));
           continue;
         }
   
@@ -198,11 +199,12 @@ async function tradingStrategy() {
           entryPrice = currentPrice;
           console.log(`Buy executed at ${currentPrice}. Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`, '-', new Date().toUTCString());
           positionOpen = true;
+          bought = true;
         }
   
-        if (!positionOpen) {
+        if (!positionOpen && bought) {
           const targetPrice = entryPrice * (1 + TAKE_PROFIT_PERCENT);
-          if (currentPrice >= targetPrice || currentPrice < ma) {
+          if (currentPrice >= targetPrice && currentPrice < ma) {
             const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
             const grossProfitETH = (currentPrice - entryPrice) * tradeAmountUSDC;
             const netProfitETH = grossProfitETH - gasFeeETH;
@@ -210,6 +212,7 @@ async function tradingStrategy() {
             console.log(`Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
             console.log(`Gross Profit (ETH): ${grossProfitETH}, Final Net Profit (ETH): ${netProfitETH}`);
             positionOpen = true;
+            bought = false;
             entryPrice = 0;
           }
         }
