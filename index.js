@@ -56,6 +56,14 @@ async function initializePoolData() {
     };
 }
 
+function formatIST(date) {
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    dateStyle: 'medium',
+    timeStyle: 'medium'
+  }).format(date);
+}
+
 async function checkAndApproveToken(tokenAddress, spender, amountInEth) {
     try {
       // Get token decimals
@@ -181,7 +189,7 @@ async function tradingStrategy() {
       try {
         let positionOpen = false;
         const currentPrice = await getCurrentPrice();
-        console.log('CurrentPrice USDC/WETH:', currentPrice, '-', new Date().toUTCString());
+        console.log('CurrentPrice USDC/WETH:', currentPrice, '-', formatIST(new Date()));
   
         priceHistory.push(currentPrice);
         if (priceHistory.length > 100) priceHistory.shift();
@@ -192,12 +200,12 @@ async function tradingStrategy() {
           continue;
         }
   
-        console.log(`Price: ${currentPrice}, MA: ${ma}`, '-', new Date().toUTCString());
+        console.log(`Price: ${currentPrice}, MA: ${ma}`, '-', formatIST(new Date()));
   
         if (!positionOpen && currentPrice > ma && !bought) {
           const { txHash, gasFeeETH } = await executeTrade('BUY', tradeAmountUSDC);
           entryPrice = currentPrice;
-          console.log(`Buy executed at ${currentPrice}. Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`, '-', new Date().toUTCString());
+          console.log(`Buy executed at ${currentPrice}. Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`, '-', formatIST(new Date()));
           positionOpen = true;
           bought = true;
         }
@@ -208,7 +216,7 @@ async function tradingStrategy() {
             const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
             const grossProfitETH = (currentPrice - entryPrice) * tradeAmountUSDC;
             const netProfitETH = grossProfitETH - gasFeeETH;
-            console.log(`${currentPrice >= targetPrice ? "Take-profit" : "MA-cross"} Sell executed at ${currentPrice}`, '-', new Date().toUTCString()); 
+            console.log(`${currentPrice >= targetPrice ? "Take-profit" : "MA-cross"} Sell executed at ${currentPrice}`, '-', formatIST(new Date())); 
             console.log(`Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
             console.log(`Gross Profit (ETH): ${grossProfitETH}, Final Net Profit (ETH): ${netProfitETH}`);
             positionOpen = true;
