@@ -20,6 +20,7 @@ const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS; // USDC
 const POOL_ADDRESS = process.env.POOL_ADDRESS; // WETH-USDC 0.05% pool
 const FEE_PERCENT = process.env.FEE_PERCENT;
 const SMA = process.env.SMA;
+const PERIOD = process.env.PERIOD;
 
 // Initialize provider and contracts
 const provider = new ethers.JsonRpcProvider(INFURA_URL);
@@ -182,7 +183,7 @@ async function tradingStrategy() {
     let entryPrice = 0;
     let bought = false;
     const tradeAmountUSDC = process.env.AMOUNT_TO_TRADE;
-    const duration = SMA * 60 * 1000;
+    const duration = PERIOD * 60 * 1000;
     const TAKE_PROFIT_PERCENT = parseFloat(process.env.TAKE_PROFIT_PERCENT) / 100;
   
     while (true) {
