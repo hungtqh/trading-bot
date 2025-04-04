@@ -214,11 +214,28 @@ async function tradingStrategy() {
           const targetPrice = entryPrice * (1 + TAKE_PROFIT_PERCENT);
           if (currentPrice >= targetPrice || currentPrice < ma) {
             const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
+            
+            // Calculate gross profit in ETH terms
             const grossProfitETH = (currentPrice - entryPrice) * tradeAmountUSDC;
-            const netProfitETH = grossProfitETH - gasFeeETH;
+        
+            // Calculate swap fees for buy and sell (total fees)
+            const swapFeeRate = parseFloat(FEE_PERCENT) / 1_000_000; // converting from Uniswap fee scale (e.g., 3000 => 0.003)
+            
+            // Swap fee for Buy in ETH terms
+            const buySwapFeeETH = entryPrice * tradeAmountUSDC * swapFeeRate;
+            // Swap fee for Sell in ETH terms
+            const sellSwapFeeETH = currentPrice * tradeAmountUSDC * swapFeeRate;
+        
+            const totalSwapFeeETH = buySwapFeeETH + sellSwapFeeETH;
+        
+            // Final Net Profit considering swap fees and gas
+            const netProfitETH = grossProfitETH - gasFeeETH - totalSwapFeeETH;
+        
             console.log(`${currentPrice >= targetPrice ? "Take-profit" : "MA-cross"} Sell executed at ${currentPrice}`, '-', formatIST(new Date())); 
             console.log(`Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
-            console.log(`Gross Profit (ETH): ${grossProfitETH}, Final Net Profit (ETH): ${netProfitETH}`);
+            console.log(`Gross Profit (ETH): ${grossProfitETH.toFixed(6)}, Swap Fees (ETH): ${totalSwapFeeETH.toFixed(6)}`);
+            console.log(`Final Net Profit (ETH): ${netProfitETH.toFixed(6)}`);
+        
             positionOpen = true;
             bought = false;
             entryPrice = 0;
