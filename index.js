@@ -4,20 +4,20 @@ const IUniswapV3Router = require('@uniswap/v3-periphery/artifacts/contracts/inte
 require("dotenv").config();
 
 // Tetnet Configuration
-const UNISWAP_V3_ROUTER_ADDRESS = '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E';
-const WETH_ADDRESS = '0xfff9976782d46cc05630d1f6ebab18b2324d6b14';
-const TOKEN_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'; // USDC
-const POOL_ADDRESS = '0x3289680dD4d6C10bb19b899729cda5eEF58AEfF1'; // WETH-USDC 0.05% pool
+// const UNISWAP_V3_ROUTER_ADDRESS = '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E';
+// const WETH_ADDRESS = '0xfff9976782d46cc05630d1f6ebab18b2324d6b14';
+// const TOKEN_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'; // USDC
+// const POOL_ADDRESS = '0x3289680dD4d6C10bb19b899729cda5eEF58AEfF1'; // WETH-USDC 0.05% pool
 
 // Configuration
 const INFURA_URL = process.env.RPC_URL;
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS;
-// const UNISWAP_V3_ROUTER_ADDRESS = process.env.UNISWAP_V3_ROUTER_ADDRESS;
+const UNISWAP_V3_ROUTER_ADDRESS = process.env.UNISWAP_V3_ROUTER_ADDRESS;
 
-// // Token setup (WETH/USDC)
-// const WETH_ADDRESS = process.env.WETH_ADDRESS;
-// const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS; // USDC
-// const POOL_ADDRESS = process.env.POOL_ADDRESS; // WETH-USDC 0.05% pool
+// Token setup (WETH/USDC)
+const WETH_ADDRESS = process.env.WETH_ADDRESS;
+const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS; // USDC
+const POOL_ADDRESS = process.env.POOL_ADDRESS; // WETH-USDC 0.05% pool
 const FEE_PERCENT = process.env.FEE_PERCENT;
 const SMA = process.env.SMA;
 const PERIOD = process.env.PERIOD;
@@ -27,13 +27,13 @@ const provider = new ethers.JsonRpcProvider(INFURA_URL);
 const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
 // Testnet only
-const routerAbi = ['function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)'];
+// const routerAbi = ['function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)'];
 const erc20Abi = [
     'function allowance(address owner, address spender) external view returns (uint256)',
     'function approve(address spender, uint256 amount) external returns (bool)',
     'function decimals() external view returns (uint8)'
 ];
-const routerContract = new ethers.Contract(UNISWAP_V3_ROUTER_ADDRESS, routerAbi, wallet);
+const routerContract = new ethers.Contract(UNISWAP_V3_ROUTER_ADDRESS, IUniswapV3Router.abi, wallet);
 const poolContract = new ethers.Contract(POOL_ADDRESS, IUniswapV3PoolABI.abi, provider);
 
 // Price history array
