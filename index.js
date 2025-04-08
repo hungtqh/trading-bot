@@ -4,20 +4,20 @@ const IUniswapV3Router = require('@uniswap/v3-periphery/artifacts/contracts/inte
 require("dotenv").config();
 
 // Tetnet Configuration
-// const UNISWAP_V3_ROUTER_ADDRESS = '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E';
-// const WETH_ADDRESS = '0xfff9976782d46cc05630d1f6ebab18b2324d6b14';
-// const TOKEN_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'; // USDC
-// const POOL_ADDRESS = '0x3289680dD4d6C10bb19b899729cda5eEF58AEfF1'; // WETH-USDC 0.05% pool
+const UNISWAP_V3_ROUTER_ADDRESS = '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E';
+const WETH_ADDRESS = '0xfff9976782d46cc05630d1f6ebab18b2324d6b14';
+const TOKEN_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'; // USDC
+const POOL_ADDRESS = '0x3289680dD4d6C10bb19b899729cda5eEF58AEfF1'; // WETH-USDC 0.05% pool
 
 // Configuration
 const INFURA_URL = process.env.RPC_URL;
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS;
-const UNISWAP_V3_ROUTER_ADDRESS = process.env.UNISWAP_V3_ROUTER_ADDRESS;
+// const UNISWAP_V3_ROUTER_ADDRESS = process.env.UNISWAP_V3_ROUTER_ADDRESS;
 
-// Token setup (WETH/USDC)
-const WETH_ADDRESS = process.env.WETH_ADDRESS;
-const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS; // USDC
-const POOL_ADDRESS = process.env.POOL_ADDRESS; // WETH-USDC 0.05% pool
+// // Token setup (WETH/USDC)
+// const WETH_ADDRESS = process.env.WETH_ADDRESS;
+// const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS; // USDC
+// const POOL_ADDRESS = process.env.POOL_ADDRESS; // WETH-USDC 0.05% pool
 const FEE_PERCENT = process.env.FEE_PERCENT;
 const SMA = process.env.SMA;
 const PERIOD = process.env.PERIOD;
@@ -27,13 +27,13 @@ const provider = new ethers.JsonRpcProvider(INFURA_URL);
 const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
 // Testnet only
-// const routerAbi = ['function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)'];
+const routerAbi = ['function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)'];
 const erc20Abi = [
     'function allowance(address owner, address spender) external view returns (uint256)',
     'function approve(address spender, uint256 amount) external returns (bool)',
     'function decimals() external view returns (uint8)'
 ];
-const routerContract = new ethers.Contract(UNISWAP_V3_ROUTER_ADDRESS, IUniswapV3Router.abi, wallet);
+const routerContract = new ethers.Contract(UNISWAP_V3_ROUTER_ADDRESS, routerAbi, wallet);
 const poolContract = new ethers.Contract(POOL_ADDRESS, IUniswapV3PoolABI.abi, provider);
 
 // Price history array
@@ -180,75 +180,65 @@ async function executeTrade(action, amountInUSDC) {
 }
   
 async function tradingStrategy() {
-    let entryPrice = 0;
-    let bought = false;
-    const tradeAmountUSDC = process.env.AMOUNT_TO_TRADE;
-    const duration = PERIOD * 60 * 1000;
-    const TAKE_PROFIT_PERCENT = parseFloat(process.env.TAKE_PROFIT_PERCENT) / 100;
-  
-    while (true) {
-      try {
-        let positionOpen = false;
-        const currentPrice = await getCurrentPrice();
-        console.log('CurrentPrice USDC/WETH:', currentPrice, '-', formatIST(new Date()));
-  
-        priceHistory.push(currentPrice);
-        if (priceHistory.length > 100) priceHistory.shift();
-  
-        const ma = calculateMovingAverage(priceHistory, SMA);
-        if (!ma) {
-          await new Promise(resolve => setTimeout(resolve, duration));
-          continue;
-        }
-  
-        console.log(`Price: ${currentPrice}, MA: ${ma}`, '-', formatIST(new Date()));
-  
-        if (!positionOpen && currentPrice > ma && !bought) {
-          const { txHash, gasFeeETH } = await executeTrade('BUY', tradeAmountUSDC);
-          entryPrice = currentPrice;
-          console.log(`Buy executed at ${currentPrice}. Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`, '-', formatIST(new Date()));
-          positionOpen = true;
-          bought = true;
-        }
-  
-        if (!positionOpen && bought) {
-          const targetPrice = entryPrice * (1 + TAKE_PROFIT_PERCENT);
-          if (currentPrice >= targetPrice || currentPrice < ma) {
-            const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
-            
-            // Calculate gross profit in ETH terms
-            const grossProfitETH = (currentPrice - entryPrice) * tradeAmountUSDC;
-        
-            // Calculate swap fees for buy and sell (total fees)
-            const swapFeeRate = parseFloat(FEE_PERCENT) / 1_000_000; // converting from Uniswap fee scale (e.g., 3000 => 0.003)
-            
-            // Swap fee for Buy in ETH terms
-            const buySwapFeeETH = entryPrice * tradeAmountUSDC * swapFeeRate;
-            // Swap fee for Sell in ETH terms
-            const sellSwapFeeETH = currentPrice * tradeAmountUSDC * swapFeeRate;
-        
-            const totalSwapFeeETH = buySwapFeeETH + sellSwapFeeETH;
-        
-            // Final Net Profit considering swap fees and gas
-            const netProfitETH = grossProfitETH - gasFeeETH - totalSwapFeeETH;
-        
-            console.log(`${currentPrice >= targetPrice ? "Take-profit" : "MA-cross"} Sell executed at ${currentPrice}`, '-', formatIST(new Date())); 
-            console.log(`Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
-            console.log(`Gross Profit (ETH): ${grossProfitETH.toFixed(6)}, Swap Fees (ETH): ${totalSwapFeeETH.toFixed(6)}`);
-            console.log(`Final Net Profit (ETH): ${netProfitETH.toFixed(6)}`);
-        
-            positionOpen = true;
-            bought = false;
-            entryPrice = 0;
-          }
-        }
-  
+  let entryPrice = 0;
+  let bought = false;
+  let profitCounter = 0;
+  let canTrade = true;
+  const tradeAmountUSDC = process.env.AMOUNT_TO_TRADE;
+  const duration = PERIOD * 60 * 1000;
+  const TAKE_PROFIT_PERCENT = parseFloat(process.env.TAKE_PROFIT_PERCENT) / 100;
+  const SMA_OFFSET = parseFloat(process.env.SMA_OFFSET) / 100;
+  const PROFIT_COUNT_LIMIT = parseInt(process.env.PROFIT_COUNT);
+
+  while (true) {
+    try {
+      const currentPrice = await getCurrentPrice();
+      priceHistory.push(currentPrice);
+      if (priceHistory.length > 100) priceHistory.shift();
+
+      const ma = calculateMovingAverage(priceHistory, SMA);
+      if (!ma) {
         await new Promise(resolve => setTimeout(resolve, duration));
-      } catch (error) {
-        console.error('Error:', error.message);
-        await new Promise(resolve => setTimeout(resolve, duration));
+        continue;
       }
+
+      const smaOffsetValue = ma * SMA_OFFSET;
+      const upperBand = ma + smaOffsetValue;
+      const lowerBand = ma - smaOffsetValue;
+
+      console.log(`Current Price: ${currentPrice}, MA: ${ma}, Bands: [${lowerBand}, ${upperBand}]`, formatIST(new Date()));
+
+      // Entry Condition
+      if (canTrade && !bought && currentPrice > upperBand) {
+        const { txHash, gasFeeETH } = await executeTrade('BUY', tradeAmountUSDC);
+        entryPrice = currentPrice;
+        bought = true;
+        profitCounter = 0;
+        console.log(`Bought at ${currentPrice} Tx: ${txHash}, Gas: ${gasFeeETH}`);
+      }
+
+      // Take Profit Condition
+      const targetPrice = entryPrice * (1 + TAKE_PROFIT_PERCENT);
+      if (bought && currentPrice >= targetPrice && profitCounter < PROFIT_COUNT_LIMIT) {
+        const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
+        bought = false;
+        profitCounter += 1;
+        canTrade = false; // Avoid immediate re-entry
+        console.log(`Profit Taken at ${currentPrice} Tx: ${txHash}, Gas: ${gasFeeETH}, Count: ${profitCounter}`);
+      }
+
+      // Re-entry Condition
+      if (!canTrade && currentPrice >= lowerBand && currentPrice <= upperBand) {
+        canTrade = true;  // Allow re-entry once price returns within SMA offset band
+        console.log("Re-entry condition met. Trading enabled.");
+      }
+
+      await new Promise(resolve => setTimeout(resolve, duration));
+    } catch (error) {
+      console.error('Strategy Error:', error.message);
+      await new Promise(resolve => setTimeout(resolve, duration));
     }
+  }
 }
 
 // Start the strategy
