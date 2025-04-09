@@ -184,11 +184,13 @@ async function tradingStrategy() {
   let bought = false;
   let profitCounter = 0;
   let canTrade = true;
-  const tradeAmountUSDC = process.env.AMOUNT_TO_TRADE;
+
+  const tradeAmountUSDC = parseFloat(process.env.AMOUNT_TO_TRADE);
   const duration = PERIOD * 60 * 1000;
   const TAKE_PROFIT_PERCENT = parseFloat(process.env.TAKE_PROFIT_PERCENT) / 100;
   const SMA_OFFSET = parseFloat(process.env.SMA_OFFSET) / 100;
   const PROFIT_COUNT_LIMIT = parseInt(process.env.PROFIT_COUNT);
+  const swapFeeRate = parseFloat(FEE_PERCENT) / 1_000_000;
 
   while (true) {
     try {
@@ -198,7 +200,7 @@ async function tradingStrategy() {
 
       const ma = calculateMovingAverage(priceHistory, SMA);
       if (!ma) {
-        await new Promise(resolve => setTimeout(resolve, duration));
+        await sleep(duration);
         continue;
       }
 
@@ -206,39 +208,61 @@ async function tradingStrategy() {
       const upperBand = ma + smaOffsetValue;
       const lowerBand = ma - smaOffsetValue;
 
-      console.log(`Current Price: ${currentPrice}, MA: ${ma}, Bands: [${lowerBand}, ${upperBand}]`, formatIST(new Date()));
+      console.log(`Price: ${currentPrice}, MA: ${ma}, Bands: [${lowerBand}, ${upperBand}]`, formatIST(new Date()));
 
-      // Entry Condition
+      // BUY logic
       if (canTrade && !bought && currentPrice > upperBand) {
         const { txHash, gasFeeETH } = await executeTrade('BUY', tradeAmountUSDC);
         entryPrice = currentPrice;
         bought = true;
         profitCounter = 0;
-        console.log(`Bought at ${currentPrice} Tx: ${txHash}, Gas: ${gasFeeETH}`);
+
+        const buyFee = entryPrice * tradeAmountUSDC * swapFeeRate;
+        console.log(`BUY at ${entryPrice}, Tx: ${txHash}, Gas: ${gasFeeETH}, Fee: ${buyFee.toFixed(6)}`, formatIST(new Date()));
       }
 
-      // Take Profit Condition
-      const targetPrice = entryPrice * (1 + TAKE_PROFIT_PERCENT);
-      if (bought && currentPrice >= targetPrice && profitCounter < PROFIT_COUNT_LIMIT) {
-        const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
-        bought = false;
-        profitCounter += 1;
-        canTrade = false; // Avoid immediate re-entry
-        console.log(`Profit Taken at ${currentPrice} Tx: ${txHash}, Gas: ${gasFeeETH}, Count: ${profitCounter}`);
+      // SELL logic (either take-profit or SMA cross)
+      if (bought) {
+        const shouldTakeProfit = currentPrice >= entryPrice * (1 + TAKE_PROFIT_PERCENT) && profitCounter < PROFIT_COUNT_LIMIT;
+        const shouldExit = currentPrice < ma;
+
+        if (shouldTakeProfit || shouldExit) {
+          const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
+
+          const grossProfitETH = (currentPrice - entryPrice) * tradeAmountUSDC;
+          const buySwapFeeETH = entryPrice * tradeAmountUSDC * swapFeeRate;
+          const sellSwapFeeETH = currentPrice * tradeAmountUSDC * swapFeeRate;
+          const totalSwapFeeETH = buySwapFeeETH + sellSwapFeeETH;
+          const netProfitETH = grossProfitETH - gasFeeETH - totalSwapFeeETH;
+
+          const reason = shouldTakeProfit ? 'Take-Profit' : 'Exit on SMA-cross';
+
+          console.log(`${reason} SELL at ${currentPrice}, Tx: ${txHash}, Gas: ${gasFeeETH}`, formatIST(new Date()));
+          console.log(`Gross: ${grossProfitETH.toFixed(6)}, SwapFee: ${totalSwapFeeETH.toFixed(6)}, Net: ${netProfitETH.toFixed(6)}`);
+
+          bought = false;
+          canTrade = false;
+          if (shouldTakeProfit) profitCounter += 1;
+        }
       }
 
-      // Re-entry Condition
+      // Enable re-entry once price returns to range
       if (!canTrade && currentPrice >= lowerBand && currentPrice <= upperBand) {
-        canTrade = true;  // Allow re-entry once price returns within SMA offset band
-        console.log("Re-entry condition met. Trading enabled.");
+        canTrade = true;
+        console.log(`Re-entry zone entered. Trading enabled.`, formatIST(new Date()));
       }
 
-      await new Promise(resolve => setTimeout(resolve, duration));
-    } catch (error) {
-      console.error('Strategy Error:', error.message);
-      await new Promise(resolve => setTimeout(resolve, duration));
+      await sleep(duration);
+    } catch (err) {
+      console.error('Error in trading strategy:', err.message);
+      await sleep(duration);
     }
   }
+}
+
+// Helper function to sleep for a given duration
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // Start the strategy
