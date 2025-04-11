@@ -181,88 +181,95 @@ async function executeTrade(action, amountInUSDC) {
   
 async function tradingStrategy() {
   let entryPrice = 0;
+  let positionOpen = false;
+  let takeProfitCounter = 0;
   let bought = false;
-  let profitCounter = 0;
-  let canTrade = true;
 
   const tradeAmountUSDC = parseFloat(process.env.AMOUNT_TO_TRADE);
+  const smaOffset = parseFloat(process.env.SMA_OFFSET) / 100;
+  const maxProfitCount = parseInt(process.env.PROFIT_COUNT, 10);
   const duration = PERIOD * 60 * 1000;
   const TAKE_PROFIT_PERCENT = parseFloat(process.env.TAKE_PROFIT_PERCENT) / 100;
-  const SMA_OFFSET = parseFloat(process.env.SMA_OFFSET) / 100;
-  const PROFIT_COUNT_LIMIT = parseInt(process.env.PROFIT_COUNT);
-  const swapFeeRate = parseFloat(FEE_PERCENT) / 1_000_000;
 
   while (true) {
     try {
       const currentPrice = await getCurrentPrice();
+      console.log('CurrentPrice USDC/WETH:', currentPrice, '-', formatIST(new Date()));
+
       priceHistory.push(currentPrice);
       if (priceHistory.length > 100) priceHistory.shift();
 
       const ma = calculateMovingAverage(priceHistory, SMA);
       if (!ma) {
-        await sleep(duration);
+        await new Promise(resolve => setTimeout(resolve, duration));
         continue;
       }
 
-      const smaOffsetValue = ma * SMA_OFFSET;
-      const upperBand = ma + smaOffsetValue;
-      const lowerBand = ma - smaOffsetValue;
+      const offsetUpper = ma * (1 + smaOffset);
+      const offsetLower = ma * (1 - smaOffset);
 
-      console.log(`Price: ${currentPrice}, MA: ${ma}, Bands: [${lowerBand}, ${upperBand}]`, formatIST(new Date()));
-
-      // BUY logic
-      if (canTrade && !bought && currentPrice > upperBand) {
-        const { txHash, gasFeeETH } = await executeTrade('BUY', tradeAmountUSDC);
-        entryPrice = currentPrice;
-        bought = true;
-        profitCounter = 0;
-
-        const buyFee = entryPrice * tradeAmountUSDC * swapFeeRate;
-        console.log(`BUY at ${entryPrice}, Tx: ${txHash}, Gas: ${gasFeeETH}, Fee: ${buyFee.toFixed(6)}`, formatIST(new Date()));
+      // Show position relative to offset band
+      let offsetPosition = '';
+      if (currentPrice > offsetUpper) {
+        offsetPosition = 'above';
+      } else if (currentPrice < offsetLower) {
+        offsetPosition = 'below';
+      } else {
+        offsetPosition = 'within';
       }
 
-      // SELL logic (either take-profit or SMA cross)
-      if (bought) {
-        const shouldTakeProfit = currentPrice >= entryPrice * (1 + TAKE_PROFIT_PERCENT) && profitCounter < PROFIT_COUNT_LIMIT;
-        const shouldExit = currentPrice < ma;
+      console.log(`Price: ${currentPrice}, MA: ${ma}, Offset Range: (${offsetLower} - ${offsetUpper})`);
+      console.log(`→ Current price is ${offsetPosition} SMA offset range.`);
 
-        if (shouldTakeProfit || shouldExit) {
+      // Buy logic
+      if (!positionOpen && currentPrice > offsetUpper && !bought) {
+        const { txHash, gasFeeETH } = await executeTrade('BUY', tradeAmountUSDC);
+        entryPrice = currentPrice;
+        positionOpen = true;
+        bought = true;
+        takeProfitCounter = 0;
+        console.log(`BUY executed at ${currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
+      }
+
+      // Sell logic
+      if (!positionOpen && bought) {
+        const targetPrice = entryPrice * (1 + TAKE_PROFIT_PERCENT);
+        const exitCondition = currentPrice >= targetPrice || currentPrice < offsetLower;
+
+        if (exitCondition && takeProfitCounter < maxProfitCount) {
           const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
 
           const grossProfitETH = (currentPrice - entryPrice) * tradeAmountUSDC;
+          const swapFeeRate = parseFloat(FEE_PERCENT) / 1_000_000;
           const buySwapFeeETH = entryPrice * tradeAmountUSDC * swapFeeRate;
           const sellSwapFeeETH = currentPrice * tradeAmountUSDC * swapFeeRate;
           const totalSwapFeeETH = buySwapFeeETH + sellSwapFeeETH;
           const netProfitETH = grossProfitETH - gasFeeETH - totalSwapFeeETH;
 
-          const reason = shouldTakeProfit ? 'Take-Profit' : 'Exit on SMA-cross';
+          console.log(`${currentPrice >= targetPrice ? "Take-profit" : "Stop-loss"} SELL executed at ${currentPrice}`);
+          console.log(`Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
+          console.log(`Gross Profit (ETH): ${grossProfitETH.toFixed(6)}, Swap Fees (ETH): ${totalSwapFeeETH.toFixed(6)}`);
+          console.log(`Net Profit (ETH): ${netProfitETH.toFixed(6)}`);
 
-          console.log(`${reason} SELL at ${currentPrice}, Tx: ${txHash}, Gas: ${gasFeeETH}`, formatIST(new Date()));
-          console.log(`Gross: ${grossProfitETH.toFixed(6)}, SwapFee: ${totalSwapFeeETH.toFixed(6)}, Net: ${netProfitETH.toFixed(6)}`);
+          takeProfitCounter++;
 
-          bought = false;
-          canTrade = false;
-          if (shouldTakeProfit) profitCounter += 1;
+          // Reset position if profit maxed or price dropped
+          if (currentPrice < offsetLower || takeProfitCounter >= maxProfitCount) {
+            positionOpen = true;
+            bought = false;
+            entryPrice = 0;
+            takeProfitCounter = 0;
+            console.log(`Position closed. Waiting for next valid reentry...`);
+          }
         }
       }
 
-      // Enable re-entry once price returns to range
-      if (!canTrade && currentPrice >= lowerBand && currentPrice <= upperBand) {
-        canTrade = true;
-        console.log(`Re-entry zone entered. Trading enabled.`, formatIST(new Date()));
-      }
-
-      await sleep(duration);
+      await new Promise(resolve => setTimeout(resolve, duration));
     } catch (err) {
-      console.error('Error in trading strategy:', err.message);
-      await sleep(duration);
+      console.error('Error:', err.message);
+      await new Promise(resolve => setTimeout(resolve, duration));
     }
   }
-}
-
-// Helper function to sleep for a given duration
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // Start the strategy
