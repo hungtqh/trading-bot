@@ -223,7 +223,7 @@ async function tradingStrategy() {
         const swapFeeRate = parseFloat(FEE_PERCENT) / 1_000_000;
         const buySwapFeeETH = grossBuyETH * swapFeeRate;
         console.log(`BUY executed at ${currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
-        console.log(`Estimated Buy Swap Fee (ETH): ${buySwapFeeETH.toFixed(6)}`);
+        console.log(`Buy Swap Fee (ETH): ${buySwapFeeETH.toFixed(6)}`);
       }
 
       // SELL logic
