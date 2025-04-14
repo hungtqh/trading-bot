@@ -207,32 +207,27 @@ async function tradingStrategy() {
 
       const offsetUpper = ma * (1 + smaOffset);
       const offsetLower = ma * (1 - smaOffset);
-
-      // Show position relative to offset band
-      let offsetPosition = '';
-      if (currentPrice > offsetUpper) {
-        offsetPosition = 'above';
-      } else if (currentPrice < offsetLower) {
-        offsetPosition = 'below';
-      } else {
-        offsetPosition = 'within';
-      }
+      const offsetPosition = currentPrice > offsetUpper ? 'above' : (currentPrice < offsetLower ? 'below' : 'within');
 
       console.log(`Price: ${currentPrice}, MA: ${ma}, Offset Range: (${offsetLower} - ${offsetUpper})`);
       console.log(`→ Current price is ${offsetPosition} SMA offset range.`);
 
-      // Buy logic
+      // BUY logic
       if (!positionOpen && currentPrice > offsetUpper && !bought) {
         const { txHash, gasFeeETH } = await executeTrade('BUY', tradeAmountUSDC);
         entryPrice = currentPrice;
         positionOpen = true;
         bought = true;
         takeProfitCounter = 0;
+        const grossBuyETH = currentPrice * tradeAmountUSDC;
+        const swapFeeRate = parseFloat(FEE_PERCENT) / 1_000_000;
+        const buySwapFeeETH = grossBuyETH * swapFeeRate;
         console.log(`BUY executed at ${currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
+        console.log(`Estimated Buy Swap Fee (ETH): ${buySwapFeeETH.toFixed(6)}`);
       }
 
-      // Sell logic
-      if (!positionOpen && bought) {
+      // SELL logic
+      if (positionOpen && bought) {
         const targetPrice = entryPrice * (1 + TAKE_PROFIT_PERCENT);
         const exitCondition = currentPrice >= targetPrice || currentPrice < offsetLower;
 
@@ -253,9 +248,8 @@ async function tradingStrategy() {
 
           takeProfitCounter++;
 
-          // Reset position if profit maxed or price dropped
           if (currentPrice < offsetLower || takeProfitCounter >= maxProfitCount) {
-            positionOpen = true;
+            positionOpen = false;
             bought = false;
             entryPrice = 0;
             takeProfitCounter = 0;
