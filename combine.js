@@ -212,6 +212,13 @@ async function tradingStrategy() {
       console.log(`Price: ${currentPrice}, MA: ${ma}, Offset Range: (${offsetLower} - ${offsetUpper})`);
       console.log(`→ Current price is ${offsetPosition} SMA offset range.`);
 
+      // Skip if price is within offset bounds
+      if (currentPrice >= offsetLower && currentPrice <= offsetUpper) {
+        console.log("Price within SMA offset range. No trade allowed.");
+        await new Promise(resolve => setTimeout(resolve, duration));
+        continue;
+      }
+
       // === LONG STRATEGY ===
       if (!longOpen && currentPrice > offsetUpper && !bought && !sold && !shortOpen) {
         const { txHash, gasFeeETH } = await executeTrade('BUY', tradeAmountUSDC);
@@ -231,7 +238,7 @@ async function tradingStrategy() {
       if (longOpen && bought) {
         const targetSell = longEntry * (1 + takeProfitPercent);
         const takeProfit = currentPrice >= targetSell;
-        const stopLoss = currentPrice < ma;
+        const stopLoss = currentPrice < ma && currentPrice < offsetLower;
 
         if ((takeProfit || stopLoss) && longTP < maxProfitCount) {
           const sellAmount = stopLoss ? tradeAmountUSDC * 2 : tradeAmountUSDC;
@@ -250,11 +257,13 @@ async function tradingStrategy() {
           console.log(`Net Profit (ETH): ${netProfitETH.toFixed(6)}`);
 
           if (stopLoss) {
-            // Flip to SHORT
             sold = true;
             shortEntry = currentPrice;
             shortOpen = true;
             shortTP = 0;
+            bought = false;
+            longOpen = false;
+            longEntry = 0;
             console.log(`Switched to SHORT after stop-loss.`);
           } else {
             longTP++;
@@ -285,7 +294,7 @@ async function tradingStrategy() {
       if (shortOpen && sold) {
         const targetBuy = shortEntry * (1 - takeProfitPercent);
         const takeProfit = currentPrice <= targetBuy;
-        const stopLoss = currentPrice > ma;
+        const stopLoss = currentPrice > ma && currentPrice > offsetUpper;
 
         if ((takeProfit || stopLoss) && shortTP < maxProfitCount) {
           const buyAmount = stopLoss ? tradeAmountUSDC * 2 : tradeAmountUSDC;
@@ -304,11 +313,13 @@ async function tradingStrategy() {
           console.log(`Net Profit (ETH): ${netProfitETH.toFixed(6)}`);
 
           if (stopLoss) {
-            // Flip to LONG
             bought = true;
             longEntry = currentPrice;
             longOpen = true;
             longTP = 0;
+            sold = false;
+            shortOpen = false;
+            shortEntry = 0;
             console.log(`Switched to LONG after stop-loss.`);
           } else {
             shortTP++;
