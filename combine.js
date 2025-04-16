@@ -4,20 +4,20 @@ const IUniswapV3Router = require('@uniswap/v3-periphery/artifacts/contracts/inte
 require("dotenv").config();
 
 // Tetnet Configuration
-const UNISWAP_V3_ROUTER_ADDRESS = '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E';
-const WETH_ADDRESS = '0xfff9976782d46cc05630d1f6ebab18b2324d6b14';
-const TOKEN_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'; // USDC
-const POOL_ADDRESS = '0x3289680dD4d6C10bb19b899729cda5eEF58AEfF1'; // WETH-USDC 0.05% pool
+// const UNISWAP_V3_ROUTER_ADDRESS = '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E';
+// const WETH_ADDRESS = '0xfff9976782d46cc05630d1f6ebab18b2324d6b14';
+// const TOKEN_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'; // USDC
+// const POOL_ADDRESS = '0x3289680dD4d6C10bb19b899729cda5eEF58AEfF1'; // WETH-USDC 0.05% pool
 
 // Configuration
 const INFURA_URL = process.env.RPC_URL;
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS;
-// const UNISWAP_V3_ROUTER_ADDRESS = process.env.UNISWAP_V3_ROUTER_ADDRESS;
+const UNISWAP_V3_ROUTER_ADDRESS = process.env.UNISWAP_V3_ROUTER_ADDRESS;
 
 // // Token setup (WETH/USDC)
-// const WETH_ADDRESS = process.env.WETH_ADDRESS;
-// const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS; // USDC
-// const POOL_ADDRESS = process.env.POOL_ADDRESS; // WETH-USDC 0.05% pool
+const WETH_ADDRESS = process.env.WETH_ADDRESS;
+const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS; // USDC
+const POOL_ADDRESS = process.env.POOL_ADDRESS; // WETH-USDC 0.05% pool
 const FEE_PERCENT = process.env.FEE_PERCENT;
 const SMA = process.env.SMA;
 const PERIOD = process.env.PERIOD;
