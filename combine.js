@@ -178,12 +178,14 @@ async function executeTrade(action, amountInUSDC) {
       gasFeeETH
     };
 }
-  
+
 async function tradingStrategy() {
   let longEntry = 0, shortEntry = 0;
   let longOpen = false, shortOpen = false;
   let longTP = 0, shortTP = 0;
   let bought = false, sold = false;
+  let waitLongReentry = false;
+  let waitShortReentry = false;
 
   const tradeAmountUSDC = parseFloat(process.env.AMOUNT_TO_TRADE);
   const smaOffset = parseFloat(process.env.SMA_OFFSET) / 100;
@@ -212,7 +214,18 @@ async function tradingStrategy() {
       console.log(`Price: ${currentPrice}, MA: ${ma}, Offset Range: (${offsetLower} - ${offsetUpper})`);
       console.log(`→ Current price is ${offsetPosition} SMA offset range.`);
 
-      // Skip if price is within offset bounds
+      // Reentry unlock conditions
+      if (waitLongReentry && currentPrice < ma) {
+        waitLongReentry = false;
+        console.log("✅ LONG strategy reentry unlocked.");
+      }
+
+      if (waitShortReentry && currentPrice > ma) {
+        waitShortReentry = false;
+        console.log("✅ SHORT strategy reentry unlocked.");
+      }
+
+      // Skip if price is within offset range
       if (currentPrice >= offsetLower && currentPrice <= offsetUpper) {
         console.log("Price within SMA offset range. No trade allowed.");
         await new Promise(resolve => setTimeout(resolve, duration));
@@ -220,7 +233,7 @@ async function tradingStrategy() {
       }
 
       // === LONG STRATEGY ===
-      if (!longOpen && currentPrice > offsetUpper && !bought && !sold && !shortOpen) {
+      if (!longOpen && currentPrice > offsetUpper && !bought && !sold && !shortOpen && !waitLongReentry) {
         const { txHash, gasFeeETH } = await executeTrade('BUY', tradeAmountUSDC);
         const grossBuyETH = currentPrice * tradeAmountUSDC;
         const swapFeeRate = parseFloat(FEE_PERCENT) / 1_000_000;
@@ -231,7 +244,7 @@ async function tradingStrategy() {
         longOpen = true;
         longTP = 0;
 
-        console.log(`BUY executed at ${currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
+        console.log(`✅ BUY ${tradeAmountUSDC} QTY executed at ${currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
         console.log(`Buy Swap Fee (ETH): ${buySwapFeeETH.toFixed(6)}`);
       }
 
@@ -251,7 +264,7 @@ async function tradingStrategy() {
           const totalSwapFeeETH = buySwapFeeETH + sellSwapFeeETH;
           const netProfitETH = grossProfitETH - gasFeeETH - totalSwapFeeETH;
 
-          console.log(`${takeProfit ? "Take-profit" : "Stop-loss"} SELL executed at ${currentPrice}`);
+          console.log(`${takeProfit ? "Take-profit" : "Stop-loss"} SELL ${sellAmount} QTY executed at ${currentPrice}`);
           console.log(`Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
           console.log(`Gross Profit (ETH): ${grossProfitETH.toFixed(6)}, Swap Fees (ETH): ${totalSwapFeeETH.toFixed(6)}`);
           console.log(`Net Profit (ETH): ${netProfitETH.toFixed(6)}`);
@@ -264,19 +277,20 @@ async function tradingStrategy() {
             bought = false;
             longOpen = false;
             longEntry = 0;
-            console.log(`Switched to SHORT after stop-loss.`);
+            console.log(`🔁 Switched to SHORT after stop-loss.`);
           } else {
             longTP++;
             longOpen = false;
             bought = false;
             longEntry = 0;
-            console.log(`Position closed. Waiting for next valid reentry...`);
+            waitLongReentry = true;
+            console.log(`✅ Take-profit. Waiting for SMA reentry before LONG resumes.`);
           }
         }
       }
 
       // === SHORT STRATEGY ===
-      if (!shortOpen && currentPrice < offsetLower && !sold && !bought && !longOpen) {
+      if (!shortOpen && currentPrice < offsetLower && !sold && !bought && !longOpen && !waitShortReentry) {
         const { txHash, gasFeeETH } = await executeTrade('SELL', tradeAmountUSDC);
         const grossSellETH = currentPrice * tradeAmountUSDC;
         const swapFeeRate = parseFloat(FEE_PERCENT) / 1_000_000;
@@ -287,7 +301,7 @@ async function tradingStrategy() {
         shortOpen = true;
         shortTP = 0;
 
-        console.log(`SELL executed at ${currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
+        console.log(`✅ SELL ${tradeAmountUSDC} QTY executed at ${currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
         console.log(`Sell Swap Fee (ETH): ${sellSwapFeeETH.toFixed(6)}`);
       }
 
@@ -307,7 +321,7 @@ async function tradingStrategy() {
           const totalSwapFeeETH = sellSwapFeeETH + buySwapFeeETH;
           const netProfitETH = grossProfitETH - gasFeeETH - totalSwapFeeETH;
 
-          console.log(`${takeProfit ? "Take-profit" : "Stop-loss"} BUY executed at ${currentPrice}`);
+          console.log(`${takeProfit ? "Take-profit" : "Stop-loss"} BUY ${buyAmount} QTY executed at ${currentPrice}`);
           console.log(`Tx: ${txHash}, GasFee(ETH): ${gasFeeETH}`);
           console.log(`Gross Profit (ETH): ${grossProfitETH.toFixed(6)}, Swap Fees (ETH): ${totalSwapFeeETH.toFixed(6)}`);
           console.log(`Net Profit (ETH): ${netProfitETH.toFixed(6)}`);
@@ -320,20 +334,21 @@ async function tradingStrategy() {
             sold = false;
             shortOpen = false;
             shortEntry = 0;
-            console.log(`Switched to LONG after stop-loss.`);
+            console.log(`🔁 Switched to LONG after stop-loss.`);
           } else {
             shortTP++;
             shortOpen = false;
             sold = false;
             shortEntry = 0;
-            console.log(`Position closed. Waiting for next valid reentry...`);
+            waitShortReentry = true;
+            console.log(`✅ Take-profit. Waiting for SMA reentry before SHORT resumes.`);
           }
         }
       }
 
       await new Promise(resolve => setTimeout(resolve, duration));
     } catch (err) {
-      console.error('Error:', err.message);
+      console.error('❌ Error:', err.message);
       await new Promise(resolve => setTimeout(resolve, duration));
     }
   }
