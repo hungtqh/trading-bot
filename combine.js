@@ -269,7 +269,7 @@ async function tradingStrategy() {
           console.log(`GP : (BUY ${buyValue.toFixed(6)} - SELL ${sellValue.toFixed(6)}) = Gross`);
           console.log(`Swap Fees (Buy + Sell): ${totalSwapFeeUSDC.toFixed(6)} USDC`);
           console.log(`NP (Net Profit): ${netProfitUSDC.toFixed(6)} USDC`);
-          console.log(`GasFee: SELL ${gasFeeETH.toFixed(18)} + BUY 0.000000000000000000 = TOTAL ${gasFeeETH.toFixed(18)}\n`);
+          console.log(`GasFee: ${gasFeeETH.toFixed(18)}\n`);
 
           if (stopLoss) {
             sold = true;
@@ -330,7 +330,7 @@ async function tradingStrategy() {
           console.log(`GP : BUY (${sellValue.toFixed(6)}) - SELL (${buyValue.toFixed(6)}) = Gross`);
           console.log(`Swap Fees (Buy + Sell): ${totalSwapFeeUSDC.toFixed(6)} USDC`);
           console.log(`NP (Net Profit): ${netProfitUSDC.toFixed(6)} USDC`);
-          console.log(`GasFee: SELL 0.000000000000000000 + BUY ${gasFeeETH.toFixed(18)} = TOTAL ${gasFeeETH.toFixed(18)}\n`);
+          console.log(`GasFee: ${gasFeeETH.toFixed(18)}\n`);
 
           if (stopLoss) {
             bought = true;
