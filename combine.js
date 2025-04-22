@@ -131,7 +131,7 @@ async function executeTrade(action, amountInUSDC) {
   
     let tx;
   
-    if (action === 'SELL') {
+    if (action === 'BUY') {
       const currentPrice = await getCurrentPrice();
       const requiredEth = (amountInUSDC * currentPrice).toFixed(18);
       const amountInETH = parseEther(requiredEth.toString());
@@ -149,7 +149,7 @@ async function executeTrade(action, amountInUSDC) {
       };
   
       tx = await routerContract.exactInputSingle(params, { gasLimit: 350000 });
-    } else if (action === 'BUY') {
+    } else if (action === 'SELL') {
       await checkAndApproveToken(TOKEN_ADDRESS, UNISWAP_V3_ROUTER_ADDRESS, amountIn);
   
       const params = {
