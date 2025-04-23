@@ -196,7 +196,7 @@ async function tradingStrategy() {
   while (true) {
     try {
       const currentPrice = await getCurrentPrice();
-      console.log('CurrentPrice USDC/WETH:', currentPrice, '-', formatIST(new Date()));
+      console.log('CurrentPrice WETH/USDC:', 1 / currentPrice, '-', formatIST(new Date()));
 
       priceHistory.push(currentPrice);
       if (priceHistory.length > 100) priceHistory.shift();
@@ -211,7 +211,7 @@ async function tradingStrategy() {
       const offsetLower = ma * (1 - smaOffset);
       const offsetPosition = currentPrice > offsetUpper ? 'above' : (currentPrice < offsetLower ? 'below' : 'within');
 
-      console.log(`Price: ${currentPrice}, MA: ${ma}, Offset Range: (${offsetLower} - ${offsetUpper})`);
+      console.log(`Price: ${1 / currentPrice}, MA: ${1 / ma}, Offset Range: (${1 / offsetUpper} - ${1 / offsetLower})`);
       console.log(`→ Current price is ${offsetPosition} SMA offset range.`);
 
       if (waitLongReentry && currentPrice < ma) {
@@ -242,7 +242,7 @@ async function tradingStrategy() {
         longOpen = true;
         longTP = 0;
 
-        console.log(`✅ BUY ${tradeAmountUSDC} QTY executed at ${currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
+        console.log(`✅ BUY ${tradeAmountUSDC} QTY executed at ${1 / currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
         console.log(`Buy Swap Fee (ETH): ${buySwapFeeETH.toFixed(6)}\n`);
       }
 
@@ -264,7 +264,7 @@ async function tradingStrategy() {
           const totalSwapFeeUSDC = buySwapFeeUSDC + sellSwapFeeUSDC;
           const netProfitUSDC = (sellValue - buyValue) - totalSwapFeeUSDC - gasFeeETH;
 
-          console.log(`${takeProfit ? "Take-profit" : "Stop-loss"} SELL ${sellAmount} QTY executed at ${currentPrice}`);
+          console.log(`${takeProfit ? "Take-profit" : "Stop-loss"} SELL ${sellAmount} QTY executed at ${1 / currentPrice}`);
           console.log(`Tx: ${txHash},`);
           console.log(`GP : (BUY ${buyValue.toFixed(6)} - SELL ${sellValue.toFixed(6)}) = Gross`);
           console.log(`Swap Fees (Buy + Sell): ${totalSwapFeeUSDC.toFixed(6)} USDC`);
@@ -303,7 +303,7 @@ async function tradingStrategy() {
         shortOpen = true;
         shortTP = 0;
 
-        console.log(`✅ SELL ${tradeAmountUSDC} QTY executed at ${currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
+        console.log(`✅ SELL ${tradeAmountUSDC} QTY executed at ${1 / currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
         console.log(`Sell Swap Fee (ETH): ${sellSwapFeeETH.toFixed(6)}\n`);
       }
 
@@ -325,7 +325,7 @@ async function tradingStrategy() {
           const totalSwapFeeUSDC = buySwapFeeUSDC + sellSwapFeeUSDC;
           const netProfitUSDC = (sellValue - buyValue) - totalSwapFeeUSDC - gasFeeETH;
 
-          console.log(`${takeProfit ? "Take-profit" : "Stop-loss"} BUY ${buyAmount} QTY executed at ${currentPrice}`);
+          console.log(`${takeProfit ? "Take-profit" : "Stop-loss"} BUY ${buyAmount} QTY executed at ${1 / currentPrice}`);
           console.log(`Tx: ${txHash},`);
           console.log(`GP : BUY (${sellValue.toFixed(6)}) - SELL (${buyValue.toFixed(6)}) = Gross`);
           console.log(`Swap Fees (Buy + Sell): ${totalSwapFeeUSDC.toFixed(6)} USDC`);
