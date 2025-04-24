@@ -242,8 +242,8 @@ async function tradingStrategy() {
         longOpen = true;
         longTP = 0;
 
-        console.log(`✅ BUY ${tradeAmountUSDC} QTY executed at ${1 / currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
-        console.log(`Buy Swap Fee (ETH): ${buySwapFeeETH.toFixed(6)}\n`);
+        console.log(`✅ SELL ${tradeAmountUSDC} QTY executed at ${1 / currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
+        console.log(`Sell Swap Fee (ETH): ${buySwapFeeETH.toFixed(6)}\n`);
       }
 
       // === LONG EXIT ===
@@ -264,7 +264,7 @@ async function tradingStrategy() {
           const totalSwapFeeUSDC = buySwapFeeUSDC + sellSwapFeeUSDC;
           const netProfitUSDC = (sellValue - buyValue) - totalSwapFeeUSDC - gasFeeETH;
 
-          console.log(`${takeProfit ? "Take-profit" : "Stop-loss"} SELL ${sellAmount} QTY executed at ${1 / currentPrice}`);
+          console.log(`${takeProfit ? "Take-profit" : "Stop-loss"} BUY ${sellAmount} QTY executed at ${1 / currentPrice}`);
           console.log(`Tx: ${txHash},`);
           console.log(`GP : (BUY ${buyValue.toFixed(6)} - SELL ${sellValue.toFixed(6)}) = Gross`);
           console.log(`Swap Fees (Buy + Sell): ${totalSwapFeeUSDC.toFixed(6)} USDC`);
@@ -303,8 +303,8 @@ async function tradingStrategy() {
         shortOpen = true;
         shortTP = 0;
 
-        console.log(`✅ SELL ${tradeAmountUSDC} QTY executed at ${1 / currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
-        console.log(`Sell Swap Fee (ETH): ${sellSwapFeeETH.toFixed(6)}\n`);
+        console.log(`✅ BUY ${tradeAmountUSDC} QTY executed at ${1 / currentPrice}. Tx: ${txHash}, GasFee: ${gasFeeETH}`, '-', formatIST(new Date()));
+        console.log(`Buy Swap Fee (ETH): ${sellSwapFeeETH.toFixed(6)}\n`);
       }
 
       // === SHORT EXIT ===
@@ -325,7 +325,7 @@ async function tradingStrategy() {
           const totalSwapFeeUSDC = buySwapFeeUSDC + sellSwapFeeUSDC;
           const netProfitUSDC = (sellValue - buyValue) - totalSwapFeeUSDC - gasFeeETH;
 
-          console.log(`${takeProfit ? "Take-profit" : "Stop-loss"} BUY ${buyAmount} QTY executed at ${1 / currentPrice}`);
+          console.log(`${takeProfit ? "Take-profit" : "Stop-loss"} SELL ${buyAmount} QTY executed at ${1 / currentPrice}`);
           console.log(`Tx: ${txHash},`);
           console.log(`GP : BUY (${sellValue.toFixed(6)}) - SELL (${buyValue.toFixed(6)}) = Gross`);
           console.log(`Swap Fees (Buy + Sell): ${totalSwapFeeUSDC.toFixed(6)} USDC`);
